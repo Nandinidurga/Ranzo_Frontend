@@ -2,16 +2,14 @@ import React from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useI18nStore, useTranslation } from '@/core/i18n';
 import { Colors, Spacing, Radius } from '@/core/theme';
-import { RanzoButton, RanzoAppBar, LoginFloatingShowcase } from '@/core/widgets';
+import { RanzoButton } from '@/core/widgets';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/core/i18n';
 
-export default function LoginRegisterScreen() {
+export default function JobsPortalScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const locale = useI18nStore((s) => s.locale);
-  const setLocale = useI18nStore((s) => s.setLocale);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -26,37 +24,38 @@ export default function LoginRegisterScreen() {
           <Text style={styles.headerTextBold}>{t('auth.headerRequestReceive')}</Text>
         </View>
       </View>
+
       <View style={styles.container}>
-        <View style={{ marginTop: Spacing.xl }}>
-          <LoginFloatingShowcase />
+        <View style={styles.titleContainer}>
+          <Text style={styles.mainTitle}>{t('jobsPortal.title')}</Text>
+          <Text style={styles.mainSubtitle}>{t('jobsPortal.subtitle')}</Text>
         </View>
 
         <View style={styles.cardsContainer}>
-          {/* Card 1: Home Services */}
-          <TouchableOpacity onPress={() => router.push('/auth/home-services')}>
+          <TouchableOpacity onPress={() => router.push('/auth/register?targetRole=seeker' as any)}>
             <View style={styles.productCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardIconWrap}>
-                  <Ionicons name="construct-outline" size={28} color={Colors.primary} />
+                  <Ionicons name="search-outline" size={28} color={Colors.primary} />
                 </View>
                 <View style={styles.cardTextWrap}>
-                  <Text style={styles.cardTitle}>{t('auth.cardHomeServices')}</Text>
-                  <Text style={styles.cardDesc}>{t('auth.cardHomeServicesDesc')}</Text>
+                  <Text style={styles.cardTitle}>{t('jobsPortal.lookingJobTitle')}</Text>
+                  <Text style={styles.cardDesc}>{t('jobsPortal.lookingJobDesc')}</Text>
                 </View>
               </View>
             </View>
           </TouchableOpacity>
 
-          {/* Card 2: Jobs */}
-          <TouchableOpacity onPress={() => router.push('/auth/jobs-portal')}>
+          <TouchableOpacity onPress={() => router.push('/auth/register?targetRole=employer' as any)}>
             <View style={styles.productCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardIconWrap}>
-                  <Ionicons name="briefcase-outline" size={28} color={Colors.primary} />
+                  <Ionicons name="megaphone-outline" size={28} color={Colors.primary} />
                 </View>
                 <View style={styles.cardTextWrap}>
-                  <Text style={styles.cardTitle}>{t('auth.cardJobs')}</Text>
-                  <Text style={styles.cardDesc}>{t('auth.cardJobsDesc')}</Text>
+                  <Text style={styles.cardTitle}>{t('jobsPortal.postJobTitle')}</Text>
+                  <Text style={styles.cardDesc}>{t('jobsPortal.postJobDesc1')}</Text>
+                  <Text style={styles.cardDesc}>{t('jobsPortal.postJobDesc2')}</Text>
                 </View>
               </View>
             </View>
@@ -78,18 +77,13 @@ export default function LoginRegisterScreen() {
             />
           </View>
         </View>
-        
-        <View style={styles.languageContainer}>
-          <TouchableOpacity onPress={() => setLocale('en')}>
-            <Text style={[styles.langText, locale === 'en' && styles.langTextActive]}>English</Text>
+
+        <View style={styles.bottomNavRow}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/')}>
+            <Ionicons name="home" size={24} color={Colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.langDivider}>|</Text>
-          <TouchableOpacity onPress={() => setLocale('hi')}>
-            <Text style={[styles.langText, locale === 'hi' && styles.langTextActive]}>हिंदी</Text>
-          </TouchableOpacity>
-          <Text style={styles.langDivider}>|</Text>
-          <TouchableOpacity onPress={() => setLocale('te')}>
-            <Text style={[styles.langText, locale === 'te' && styles.langTextActive]}>తెలుగు</Text>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -101,12 +95,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: Colors.surfaceWhite,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xl,
-    justifyContent: 'space-between',
   },
   headerRowContainer: {
     flexDirection: 'row',
@@ -132,9 +120,31 @@ const styles = StyleSheet.create({
     color: Colors.inkNavy,
     marginTop: 2,
   },
+  container: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.xl,
+    justifyContent: 'flex-start',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+    marginTop: Spacing.lg,
+  },
+  mainTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.inkNavy,
+    marginBottom: 4,
+  },
+  mainSubtitle: {
+    fontSize: 14,
+    color: Colors.inkNavy,
+    fontWeight: '500',
+  },
   cardsContainer: {
     gap: Spacing.md,
-    marginVertical: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   productCard: {
     backgroundColor: Colors.surfaceCanvas,
@@ -165,6 +175,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: Colors.inkNavy,
+    marginBottom: 2,
   },
   cardDesc: {
     fontSize: 13,
@@ -173,29 +184,23 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xl,
   },
   buttonWrapper: {
     flex: 1,
   },
-  languageContainer: {
+  bottomNavRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 'auto',
+    marginBottom: Spacing.md,
+  },
+  iconButton: {
+    backgroundColor: Colors.primarySoft,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  langText: {
-    fontSize: 14,
-    color: Colors.inkMuted,
-    fontWeight: '600',
-  },
-  langTextActive: {
-    color: Colors.primary,
-    fontWeight: '800',
-  },
-  langDivider: {
-    fontSize: 14,
-    color: Colors.inkMuted,
   },
 });

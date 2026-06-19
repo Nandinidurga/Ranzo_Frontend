@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing } from '@/core/theme';
 import { RanzoAppBar, RanzoButton, RanzoTextField } from '@/core/widgets';
@@ -19,6 +19,8 @@ import { useAuthStore } from '@/data/store';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const targetRole = params.targetRole as string | undefined;
   const signIn = useAuthStore((s) => s.signIn);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -108,7 +110,21 @@ export default function RegisterScreen() {
       await signIn(tokenRes.access_token);
       const userSummary = await getUserMe();
       await setUser(userSummary);
-      router.replace('/home' as any);
+      
+      if (targetRole) {
+        const isCompleted = userSummary?.registered_roles?.includes(targetRole);
+        if (isCompleted) {
+          if (targetRole === 'customer') {
+            router.replace('/customer/(tabs)' as any);
+          } else {
+            router.replace(`/${targetRole}/dashboard` as any);
+          }
+        } else {
+          router.replace(`/profile-setup?role=${targetRole}` as any);
+        }
+      } else {
+        router.replace('/home' as any);
+      }
     } catch (err: any) {
       setError(err?.message || 'Registration failed.');
     } finally {
@@ -235,7 +251,7 @@ export default function RegisterScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push('/auth/login' as any)}
+            onPress={() => router.push((targetRole ? `/auth/login?targetRole=${targetRole}` : '/auth/login') as any)}
             style={styles.loginLink}
           >
             <Text style={styles.loginText}>

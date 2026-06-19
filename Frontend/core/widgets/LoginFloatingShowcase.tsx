@@ -13,7 +13,7 @@ import { Colors, Elevation, Radius, Spacing } from '@/core/theme';
 
 const HERO_SLIDES: { id: string; source: ImageSourcePropType }[] = [
   { id: 'h1', source: require('@/assets/hero/hero01.png') },
-  { id: 'h2', source: require('@/assets/hero/hero02.png') },
+  // { id: 'h2', source: require('@/assets/hero/hero02.png') },
   { id: 'h3', source: require('@/assets/hero/hero03.png') },
   { id: 'h4', source: require('@/assets/hero/hero04.png') },
   { id: 'h5', source: require('@/assets/hero/hero05.png') },

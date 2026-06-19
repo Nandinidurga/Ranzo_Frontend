@@ -13,7 +13,7 @@ export function SplashView() {
     >
       <View style={styles.center}>
         <Image source={require('@/image.png')} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.tagline}>{ROLE_SELECT_TAGLINE}</Text>
+        {/* <Text style={styles.tagline}>{ROLE_SELECT_TAGLINE}</Text> */}
       </View>
     </LinearGradient>
   );
