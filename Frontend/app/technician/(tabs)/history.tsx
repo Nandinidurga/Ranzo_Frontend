@@ -4,22 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Radius } from '@/core/theme';
 import { getHistoryBookings, Booking } from '@/core/api/bookings';
-import { wsUrl } from '@/core/config/api';
 
-import { useAuthStore } from '@/data/store';
-
-export default function HistoryScreen() {
+export default function TechnicianHistoryScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const token = useAuthStore((s) => s.token);
-  const [notification, setNotification] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const data = await getHistoryBookings('customer');
+        const data = await getHistoryBookings('technician');
         setBookings(data);
       } catch (err: any) {
         setError(err?.message || 'Failed to load history.');
@@ -28,31 +22,7 @@ export default function HistoryScreen() {
       }
     };
     fetchHistory();
-
-    const ws = new WebSocket(`${wsUrl('/api/v1/bookings/ws')}?token=${token}`);
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const data = payload.data || {};
-        
-        if (payload.event === 'booking_updated') {
-          if (['COMPLETED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_TECH'].includes(data.status)) {
-            setNotification(`Booking ${data.status}!`);
-            setBookings(prev => {
-              if (prev.find(b => b.id === data.id)) return prev.map(b => b.id === data.id ? data : b);
-              return [data, ...prev];
-            });
-            setTimeout(() => setNotification(null), 5000);
-          }
-        }
-      } catch (e) {}
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [token]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -66,13 +36,8 @@ export default function HistoryScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {notification && (
-            <View style={{ backgroundColor: Colors.primary, padding: Spacing.sm, alignItems: 'center' }}>
-              <Text style={{ color: Colors.white, fontWeight: '600' }}>{notification}</Text>
-            </View>
-          )}
           <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.title}>Booking History</Text>
+          <Text style={styles.title}>Job History</Text>
           {bookings.length === 0 ? (
             <Text style={{ color: Colors.inkMuted }}>No history found.</Text>
           ) : (
@@ -80,7 +45,7 @@ export default function HistoryScreen() {
               <View key={b.id} style={styles.card}>
                 <Text style={styles.cardTitle}>{b.category} - {b.status}</Text>
                 <Text style={styles.cardSub}>{new Date(b.created_at).toLocaleString()}</Text>
-                <Text style={styles.cardSub}>Technician: {b.technician_id || 'None'}</Text>
+                <Text style={styles.cardSub}>Customer ID: {b.customer_id.slice(-6)}</Text>
               </View>
             ))
           )}

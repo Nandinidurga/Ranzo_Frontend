@@ -2,17 +2,46 @@ import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from app.api.deps import get_current_user_id, get_db
 from app.models.booking import BookingDocument, Location, AddressDetails, Timeline, Verification
 from app.schemas.booking import BookingCreate, BookingResponse, BookingStateUpdate, TimelineResponse, VerificationResponse
+from app.services.ws_manager import ws_manager
 from app.services.sse_manager import manager as sse_manager
 
 router = APIRouter()
+
+@router.websocket("/ws")
+async def websocket_bookings(websocket: WebSocket, token: str):
+    # Manual token decoding since Depends(get_current_user_id) won't work perfectly over WS
+    from app.core.security import decode_access_token
+    try:
+        user_id = decode_access_token(token)
+    except Exception:
+        await websocket.close(code=1008)
+        return
+        
+    if not user_id:
+        await websocket.close(code=1008)
+        return
+
+    print(f"[WS] User {user_id} connected.")
+    await ws_manager.connect(websocket, user_id)
+    try:
+        while True:
+            # We don't expect client messages, just keep it open
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        print(f"[WS] User {user_id} disconnected.")
+    except Exception as e:
+        print(f"[WS] Exception for user {user_id}: {e}")
+    finally:
+        ws_manager.disconnect(websocket, user_id)
 
 def _to_booking_response(doc: dict, current_user_id: str = None) -> BookingResponse:
     # Handle older docs that might not have new fields
@@ -74,9 +103,10 @@ async def create_booking(
 
     # Trigger the asynchronous Redis Radius-Expansion algorithm
     from app.services.matchmaking import matchmaker
-    await matchmaker.broadcast_booking(doc)
+    await matchmaker.broadcast_booking(doc, db)
 
     return _to_booking_response(doc, user_id)
+
 
 @router.post("/{booking_id}/accept")
 async def accept_booking(
@@ -112,6 +142,8 @@ async def accept_booking(
     if not updated:
         raise HTTPException(status.HTTP_409_CONFLICT, "Another technician already accepted this booking")
 
+    payload = jsonable_encoder(_to_booking_response(updated, doc["customer_id"]))
+    await ws_manager.notify_users([doc["customer_id"]], "booking_updated", payload)
     return {"msg": "Accepted successfully", "booking": _to_booking_response(updated, user_id)}
 
 @router.post("/{booking_id}/confirm")
@@ -126,8 +158,12 @@ async def confirm_technician(
 
     updated = await db.bookings.find_one_and_update(
         {"_id": booking_id},
-        {"$set": {"status": "CUSTOMER_CONFIRMED"}}
+        {"$set": {"status": "CUSTOMER_CONFIRMED"}},
+        return_document=True
     )
+    if updated.get("technician_id"):
+        payload = jsonable_encoder(_to_booking_response(updated, updated["technician_id"]))
+        await ws_manager.notify_users([updated["technician_id"]], "booking_updated", payload)
     return {"msg": "Confirmed successfully"}
 
 @router.post("/{booking_id}/transit")
@@ -140,10 +176,13 @@ async def start_transit(
     if not doc or doc["status"] != "CUSTOMER_CONFIRMED":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid state to start transit")
 
-    await db.bookings.update_one(
+    updated = await db.bookings.find_one_and_update(
         {"_id": booking_id},
-        {"$set": {"status": "IN_TRANSIT", "timeline.in_transit_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": "IN_TRANSIT", "timeline.in_transit_at": datetime.now(timezone.utc)}},
+        return_document=True
     )
+    payload = jsonable_encoder(_to_booking_response(updated, updated["customer_id"]))
+    await ws_manager.notify_users([updated["customer_id"]], "booking_updated", payload)
     return {"msg": "In transit"}
 
 @router.post("/{booking_id}/start")
@@ -160,10 +199,13 @@ async def start_job(
     if doc["verification"]["start_otp"] != payload.otp:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Start OTP")
 
-    await db.bookings.update_one(
+    updated = await db.bookings.find_one_and_update(
         {"_id": booking_id},
-        {"$set": {"status": "IN_PROGRESS", "timeline.started_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": "IN_PROGRESS", "timeline.started_at": datetime.now(timezone.utc)}},
+        return_document=True
     )
+    payload = jsonable_encoder(_to_booking_response(updated, updated["customer_id"]))
+    await ws_manager.notify_users([updated["customer_id"]], "booking_updated", payload)
     return {"msg": "Job started"}
 
 @router.post("/{booking_id}/complete")
@@ -201,10 +243,13 @@ async def complete_job(
     }
     await db.wallet_transactions.insert_one(transaction)
 
-    await db.bookings.update_one(
+    updated = await db.bookings.find_one_and_update(
         {"_id": booking_id},
-        {"$set": {"status": "PENDING_RATING", "timeline.completed_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": "PENDING_RATING", "timeline.completed_at": datetime.now(timezone.utc)}},
+        return_document=True
     )
+    payload = jsonable_encoder(_to_booking_response(updated, updated["customer_id"]))
+    await ws_manager.notify_users([updated["customer_id"]], "booking_updated", payload)
     return {"msg": "Job work finished, wallet debited. Pending ratings from both sides."}
 
 @router.post("/{booking_id}/cancel")
@@ -251,10 +296,20 @@ async def cancel_booking(
             await db.wallet_transactions.insert_one(transaction)
 
     new_status = "CANCELLED_BY_CUSTOMER" if role == "customer" else "CANCELLED_BY_TECH"
-    await db.bookings.update_one(
+    updated = await db.bookings.find_one_and_update(
         {"_id": booking_id},
-        {"$set": {"status": new_status}}
+        {"$set": {"status": new_status}},
+        return_document=True
     )
+    
+    # Notify the other party
+    if role == "technician":
+        payload = jsonable_encoder(_to_booking_response(updated, updated["customer_id"]))
+        await ws_manager.notify_users([updated["customer_id"]], "booking_updated", payload)
+    elif updated.get("technician_id"):
+        payload = jsonable_encoder(_to_booking_response(updated, updated["technician_id"]))
+        await ws_manager.notify_users([updated["technician_id"]], "booking_updated", payload)
+
     return {"msg": f"Booking cancelled. Status: {new_status}"}
 
 @router.get("/active", response_model=List[BookingResponse])
@@ -307,3 +362,15 @@ async def sse_stream(user_id: str = Depends(get_current_user_id)):
             raise
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@router.get("/{booking_id}", response_model=BookingResponse)
+async def get_booking_by_id(
+    booking_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    doc = await db.bookings.find_one({"_id": booking_id})
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booking not found")
+        
+    return _to_booking_response(doc, user_id)

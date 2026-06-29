@@ -1,7 +1,12 @@
 import asyncio
 import json
+from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from bson import ObjectId
 from app.core.redis import redis_client
-from app.services.sse_manager import manager as sse_manager
+from app.services.ws_manager import ws_manager
+from app.api.v1.bookings import _to_booking_response
+from fastapi.encoders import jsonable_encoder
 
 class MatchmakingService:
     def __init__(self):
@@ -17,18 +22,18 @@ class MatchmakingService:
         """Remove a technician from the active pool if they go offline."""
         await redis_client.zrem(self.GEO_KEY, technician_id)
 
-    async def broadcast_booking(self, booking_doc: dict):
+    async def broadcast_booking(self, booking_doc: dict, db: AsyncIOMotorDatabase):
         """
         Executes the Radius-Expansion algorithm asynchronously.
         Does not block the main thread.
         """
-        asyncio.create_task(self._radius_expansion_worker(booking_doc))
+        asyncio.create_task(self._radius_expansion_worker(booking_doc, db))
 
-    async def _radius_expansion_worker(self, booking_doc: dict):
+    async def _radius_expansion_worker(self, booking_doc: dict, db: AsyncIOMotorDatabase):
         """
         Starts at 3km, expands to 5km, then 10km every 60 seconds if not accepted.
         """
-        radiuses = [3, 5, 10]  # in km
+        radiuses = [10]  # Start at 10km
         booking_id = booking_doc["_id"]
         category = booking_doc["category"]
         longitude = booking_doc["location"]["coordinates"][0]
@@ -48,15 +53,27 @@ class MatchmakingService:
                 radius, 
                 unit="km"
             )
+            print(f"[MATCHMAKER] GEORADIUS at {longitude}, {latitude} radius {radius}km returned: {nearby_techs}")
             
             if nearby_techs:
-                # 3. Notify them via WebSockets
-                await sse_manager.notify_technicians(nearby_techs, "new_booking", {
-                    "booking_id": booking_id,
-                    "category": category,
-                    "problem": booking_doc.get("problem_description", ""),
-                    "radius_tried": radius
+                # Filter technicians by skill (case insensitive to match database format)
+                valid_techs_cursor = db.technician_profiles.find({
+                    "user_id": {"$in": nearby_techs},
+                    "skills": category.lower()
                 })
+                valid_tech_docs = await valid_techs_cursor.to_list(length=None)
+                valid_tech_ids = [doc["user_id"] for doc in valid_tech_docs]
+
+                if valid_tech_ids:
+                    # 3. Notify them via WebSockets
+                    payload = jsonable_encoder(_to_booking_response(booking_doc, ""))
+                    payload["radius_tried"] = radius
+                    print(f"[MATCHMAKER] Notifying techs: {valid_tech_ids}")
+                    await ws_manager.notify_users(valid_tech_ids, "new_booking", payload)
+                else:
+                    print(f"[MATCHMAKER] No technicians with skill '{category}' found within {radius}km!")
+            else:
+                print(f"[MATCHMAKER] No technicians found within {radius}km!")
 
             # Wait 45 seconds before expanding the radius
             await asyncio.sleep(45)

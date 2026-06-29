@@ -102,6 +102,16 @@ async def get_my_profile(
     profile = await get_profile(user_id, role, db)
     if not profile:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Profile not found for role '{role.value}'")
+        
+    # Auto-sync to Redis if technician is online (recovers from backend restarts)
+    if role == UserRole.technician and profile.get("online_status"):
+        loc = profile.get("location_coords")
+        if loc and len(loc) == 2:
+            from app.services.matchmaking import matchmaker
+            # Fire and forget
+            import asyncio
+            asyncio.create_task(matchmaker.update_technician_location(user_id, loc[0], loc[1]))
+            
     return _SERIALIZERS[role](profile)
 
 
@@ -163,6 +173,16 @@ async def update_my_profile(
                         status.HTTP_403_FORBIDDEN, 
                         "You must be approved by an admin before going online."
                     )
+                
+                # Fallback to existing coordinates if not provided in the patch request
+                if validated.longitude is None or validated.latitude is None:
+                    loc = current_profile.get("location_coords")
+                    if loc and len(loc) == 2:
+                        await matchmaker.update_technician_location(
+                            user_id, 
+                            loc[0], 
+                            loc[1]
+                        )
             elif validated.online_status is False:
                 # Remove from active Redis matchmaking pool
                 await matchmaker.remove_technician(user_id)

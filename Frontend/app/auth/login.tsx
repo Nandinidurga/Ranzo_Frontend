@@ -93,7 +93,7 @@ export default function LoginScreen() {
           if (targetRole === 'customer') {
             router.replace('/customer/(tabs)' as any);
           } else {
-            router.replace(`/${targetRole}/dashboard` as any);
+            router.replace(`/${targetRole}/(tabs)` as any);
           }
         } else {
           router.replace(`/profile-setup?role=${targetRole}` as any);

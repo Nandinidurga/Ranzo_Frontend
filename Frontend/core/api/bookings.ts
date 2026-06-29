@@ -60,6 +60,13 @@ export async function createBooking(payload: BookingCreate): Promise<Booking> {
   });
 }
 
+export async function getBookingById(bookingId: string): Promise<Booking> {
+  return apiFetch<Booking>(apiV1Path(`/bookings/${bookingId}`), {
+    method: 'GET',
+    auth: true,
+  });
+}
+
 export async function acceptBooking(bookingId: string): Promise<{ msg: string; booking: Booking }> {
   return apiFetch<{ msg: string; booking: Booking }>(apiV1Path(`/bookings/${bookingId}/accept`), {
     method: 'POST',
@@ -76,6 +83,13 @@ export async function confirmTechnician(bookingId: string, technicianId?: string
 
 export async function getActiveBookings(role: 'customer' | 'technician'): Promise<Booking[]> {
   return apiFetch<Booking[]>(apiV1Path(`/bookings/active?role=${role}`), {
+    method: 'GET',
+    auth: true,
+  });
+}
+
+export async function getHistoryBookings(role: 'customer' | 'technician'): Promise<Booking[]> {
+  return apiFetch<Booking[]>(apiV1Path(`/bookings/history?role=${role}`), {
     method: 'GET',
     auth: true,
   });

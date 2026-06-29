@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 //   EXPO_PUBLIC_API_BASE_URL=https://your-tunnel.devtunnels.ms
 // in a .env file at the project root before running `npx expo start`.
 // ─────────────────────────────────────────────────────────────────────────────
-const DEFAULT_API_BASE_URL = 'https://adventure-trucks-clinton-previously.trycloudflare.com';
+const DEFAULT_API_BASE_URL = 'https://xqn9zhjk-8000.inc1.devtunnels.ms/';
 
 function normalizeBaseUrl(url: string | undefined | null): string {
   return (url?.trim() || '').replace(/\/+$/, '');
@@ -33,6 +33,12 @@ export const API_REQUEST_TIMEOUT_MS = 20_000;
 export function apiUrl(path: string) {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${p}`;
+}
+
+export function wsUrl(path: string) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  let base = API_BASE_URL.replace(/^http/, 'ws');
+  return `${base}${p}`;
 }
 
 /** Prefix path with `/api/v1` when not already present. */

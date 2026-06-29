@@ -17,11 +17,7 @@ export default function HomeServicesScreen() {
     if (user) {
       const isCompleted = user?.registered_roles?.includes(role);
       if (isCompleted) {
-        if (role === 'customer') {
-          router.push('/customer/(tabs)' as any);
-        } else {
-          router.push(`/${role}/dashboard` as any);
-        }
+        router.push(`/${role}/(tabs)` as any);
       } else {
         router.push(`/profile-setup?role=${role}` as any);
       }

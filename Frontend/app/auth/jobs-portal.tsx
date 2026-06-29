@@ -17,7 +17,7 @@ export default function JobsPortalScreen() {
     if (user) {
       const isCompleted = user?.registered_roles?.includes(role);
       if (isCompleted) {
-        router.push(`/${role}/dashboard` as any);
+        router.push(`/${role}/(tabs)` as any);
       } else {
         router.push(`/profile-setup?role=${role}` as any);
       }

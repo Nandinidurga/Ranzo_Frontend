@@ -12,9 +12,11 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Elevation } from '@/core/theme';
 import { RanzoAppBar, RanzoButton } from '@/core/widgets';
+
+import { apiUrl, wsUrl } from '@/core/config/api';
+import { useAuthStore } from '@/data/store';
 import { getProfileMe, CustomerProfile } from '@/core/api/profiles';
 import { getActiveBookings, confirmTechnician, cancelBooking, Booking } from '@/core/api/bookings';
-import { useAuthStore } from '@/data/store';
 
 const SERVICES = [
   { icon: 'construct-outline' as const, label: 'Carpenter' },
@@ -31,10 +33,12 @@ const SERVICES = [
 export default function CustomerDashboard() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,9 +58,33 @@ export default function CustomerDashboard() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 10000); // Smart polling every 10s
-    return () => clearInterval(interval);
-  }, []);
+
+    // Set up WebSocket
+    const ws = new WebSocket(`${wsUrl('/api/v1/bookings/ws')}?token=${token}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const data = payload.data || {};
+        
+        if (payload.event === 'booking_updated') {
+          setNotification(`Booking status updated to ${data.status}!`);
+          setBookings(prev => {
+            const exists = prev.find(b => b.id === data.id);
+            if (exists) {
+              return prev.map(b => b.id === data.id ? data : b);
+            }
+            return prev;
+          });
+          setTimeout(() => setNotification(null), 5000);
+        }
+      } catch (e) {}
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [token]);
 
   const handleConfirm = async (bookingId: string) => {
     try {
@@ -78,6 +106,15 @@ export default function CustomerDashboard() {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      const b = await getActiveBookings('customer');
+      setBookings(b);
+    } catch (e: any) {
+      alert("Failed to refresh: " + e.message);
+    }
+  };
+
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -92,6 +129,12 @@ export default function CustomerDashboard() {
           </Pressable>
         }
       />
+
+      {notification && (
+        <View style={{ backgroundColor: Colors.primary, padding: Spacing.sm, alignItems: 'center' }}>
+          <Text style={{ color: Colors.white, fontWeight: '600' }}>{notification}</Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -134,7 +177,12 @@ export default function CustomerDashboard() {
 
           {/* Active bookings state */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Bookings</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>My Bookings</Text>
+              <Pressable onPress={handleRefresh} style={{ padding: Spacing.xs }}>
+                <Ionicons name="reload" size={22} color={Colors.primary} />
+              </Pressable>
+            </View>
             {bookings.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color={Colors.inkMuted} />

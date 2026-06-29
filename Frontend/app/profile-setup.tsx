@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '@/core/theme';
 import { RanzoAppBar, RanzoButton, RanzoTextField } from '@/core/widgets';
-import { updateProfileMe, UserRole, uploadFile } from '@/core/api/profiles';
+import { updateProfileMe, getProfileMe, UserRole, uploadFile } from '@/core/api/profiles';
 import { getUserMe } from '@/core/api/users';
 import { useAuthStore } from '@/data/store';
 
@@ -299,8 +299,8 @@ export default function ProfileSetupScreen() {
             setError('Please upload your Photo.');
             setLoading(false); return;
           }
-          if (!villageCity.trim() || !pinCode.trim() || !district.trim() || !stateName.trim() || !preferredDistance.trim()) {
-            setError('Please fill all location fields.');
+          if (!location.trim() || latitude === null || longitude === null) {
+            setError('Please detect your location.');
             setLoading(false); return;
           }
           if (!termsAgreed) {
@@ -313,14 +313,18 @@ export default function ProfileSetupScreen() {
           let uploadedPhotoUrl = '';
           try {
             // Upload adhar
-            const ext1 = adharImageUri.split('.').pop() || 'jpg';
-            const res1 = await uploadFile(adharImageUri, `adhar.${ext1}`, `image/${ext1}`);
-            uploadedAdharUrl = res1.url;
+            if (adharImageUri) {
+              const ext1 = adharImageUri.split('.').pop() || 'jpg';
+              const res1 = await uploadFile(adharImageUri, `adhar.${ext1}`, `image/${ext1}`);
+              uploadedAdharUrl = res1.url;
+            }
 
             // Upload photo
-            const ext2 = photoUri.split('.').pop() || 'jpg';
-            const res2 = await uploadFile(photoUri, `photo.${ext2}`, `image/${ext2}`);
-            uploadedPhotoUrl = res2.url;
+            if (photoUri) {
+              const ext2 = photoUri.split('.').pop() || 'jpg';
+              const res2 = await uploadFile(photoUri, `photo.${ext2}`, `image/${ext2}`);
+              uploadedPhotoUrl = res2.url;
+            }
           } catch (e: any) {
             setError('Image upload failed: ' + e.message);
             setLoading(false);
@@ -333,10 +337,6 @@ export default function ProfileSetupScreen() {
             adhar_number: adharNumber.trim(),
             adhar_image_url: uploadedAdharUrl,
             photo_url: uploadedPhotoUrl,
-            village_city: villageCity.trim(),
-            pin_code: pinCode.trim(),
-            district: district.trim(),
-            state: stateName.trim(),
             preferred_distance: parseInt(preferredDistance, 10) || 0,
             terms_agreed: termsAgreed,
             online_status: false,
@@ -510,22 +510,19 @@ export default function ProfileSetupScreen() {
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: Spacing.md }}>
-                  <View style={{ flex: 1 }}>
-                    <RanzoTextField label="Village / City*" value={villageCity} onChangeText={setVillageCity} placeholder="Village/City" />
+                <View style={styles.locationRow}>
+                  <View style={styles.locationInputWrap}>
+                    <RanzoTextField
+                      label="Your Location*"
+                      value={location}
+                      onChangeText={() => {}}
+                      placeholder="Tap detect button"
+                      editable={false}
+                    />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <RanzoTextField label="PIN Code*" value={pinCode} onChangeText={setPinCode} keyboardType="numeric" placeholder="123456" />
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: Spacing.md }}>
-                  <View style={{ flex: 1 }}>
-                    <RanzoTextField label="District*" value={district} onChangeText={setDistrict} placeholder="District" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <RanzoTextField label="State*" value={stateName} onChangeText={setStateName} placeholder="State" />
-                  </View>
+                  <Pressable style={styles.detectBtn} onPress={handleDetectLocation}>
+                    <Ionicons name="location" size={24} color={Colors.white} />
+                  </Pressable>
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: Spacing.md, alignItems: 'center' }}>

@@ -15,7 +15,7 @@ from app.schemas.auth import MessageResponse
 router = APIRouter()
 
 class AdminLoginRequest(BaseModel):
-    username: str
+    phone: str
     password: str
 
 @router.post("/auth/login", response_model=TokenResponse, summary="Admin Web Login")
@@ -23,8 +23,7 @@ async def admin_login(
     body: AdminLoginRequest,
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    # Username from web admin can be mapped to phone in our DB.
-    user = await user_service.get_user_by_phone(body.username, db)
+    user = await user_service.get_user_by_phone(body.phone, db)
     if not user or not verify_password(body.password, user["hashed_password"]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
         

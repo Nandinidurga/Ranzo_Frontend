@@ -43,7 +43,7 @@ export default function TechnicianWallet() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <RanzoAppBar title="Wallet & Escrow" showBack onBack={() => router.back()} />
+      <RanzoAppBar title="Wallet & Escrow" />
 
       {loading ? (
         <View style={styles.center}>
